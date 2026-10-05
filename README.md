@@ -2,7 +2,7 @@
 
 A full-stack DSA project. Students place orders, and the canteen serves them **first come, first served**. The orders are stored in a **circular queue** (a fixed-size array with `front` and `rear` pointers).
 
-**Live demo:** _add your deployed link here_
+https://college-canteen-order-system-dsa-project.onrender.com
 
 ## How the queue works
 
