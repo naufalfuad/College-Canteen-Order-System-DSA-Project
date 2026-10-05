@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Canteen Order Queue</title>
+<style>
+:root{--bg:#f3f6fb;--fg:#0f1b3d;--mut:#586380;--card:#fff;--bd:#d2d9e8;--ac:#1d4ed8;--on:#fff;--rear:#0f766e;--err:#b42318;
+ box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1020;--fg:#e8ecf7;--mut:#94a0bf;--card:#151c33;--bd:#27314f;--ac:#7aa2ff;--on:#0b1020;--rear:#5eead4;--err:#ff8a80}}
+:root[data-theme="dark"]{--bg:#0b1020;--fg:#e8ecf7;--mut:#94a0bf;--card:#151c33;--bd:#27314f;--ac:#7aa2ff;--on:#0b1020;--rear:#5eead4;--err:#ff8a80}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 "Candara","Segoe UI",system-ui,sans-serif}
+main{max-width:960px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:1.9rem;margin:0 0 4px}h2{font-size:1.05rem;margin:0 0 12px}
+.sub{margin:0 0 20px;color:var(--mut);max-width:64ch}
+.badge{display:inline-block;font-size:.8rem;padding:2px 10px;border:1px solid var(--bd);border-radius:99px;color:var(--mut);margin-left:8px;vertical-align:middle;font-weight:400}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.panel{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px 14px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--ac)}button:disabled{opacity:.45;cursor:default}
+button.p{background:var(--ac);color:var(--on);border-color:var(--ac);font-weight:600}
+input,select{background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;min-width:0}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+#err{color:var(--err);min-height:1.5em;margin:8px 0 0}
+.next{font-size:1.15rem;font-weight:700;margin:0 0 12px;min-height:1.6em}.mut{color:var(--mut)}
+.line{display:flex;align-items:stretch;gap:10px;overflow-x:auto;padding:26px 4px 10px}
+.line em{color:var(--mut)}
+.tk{position:relative;flex:0 0 140px;border:2px dashed var(--bd);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:1px;background:var(--bg)}
+.tk b{font-size:1.25rem}.tk span,.tk i{font-size:.85rem;color:var(--mut);font-style:normal}
+.tk.fr{border:2px solid var(--ac)}
+.tag{position:absolute;top:-21px;left:2px;font-size:.75rem;font-weight:700;color:var(--ac)}.tag.r{left:auto;right:2px;color:var(--rear)}
+.slots{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px}
+.slot{text-align:center;border:1.5px solid var(--bd);border-radius:8px;padding:2px 0 4px}
+.slot.full{background:var(--card);border-color:var(--fg)}.slot b{display:block;min-height:1.5em}
+.slot small{display:block;font-weight:700;color:var(--ac);min-height:1.3em}.slot i{font-size:.75rem;color:var(--mut);font-style:normal}
+#log b{color:var(--fg)}#log{color:var(--mut)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Canteen Order Queue <span class="badge" id="mode">connecting…</span></h1>
+  <p class="sub">Orders are served first come, first served. A new order joins the <b>rear</b> of the queue, and the cook serves the order at the <b>front</b>. The canteen can hold 8 waiting orders.</p>
+
+  <div class="grid">
+    <section class="panel">
+      <h2>Place an order</h2>
+      <div class="row">
+        <input id="nm" placeholder="Student name" aria-label="Student name" maxlength="20" onkeydown="if(event.key==='Enter')order()">
+        <select id="item" aria-label="Menu item"></select>
+        <button class="p" onclick="order()">Place order</button>
+      </div>
+      <p id="err" role="alert"></p>
+    </section>
+    <section class="panel">
+      <h2>Counter</h2>
+      <p class="next" id="next" aria-live="polite"></p>
+      <div class="row"><button class="p" id="sv" onclick="act('serve')">Serve next order</button><button onclick="act('reset')">Reset</button></div>
+      <p class="mut" id="cnt" style="margin:12px 0 0"></p>
+    </section>
+  </div>
+
+  <section class="panel"><h2>The queue (front to rear)</h2><div class="line" id="line"></div></section>
+
+  <section class="panel">
+    <h2>How it is stored: a circular array</h2>
+    <div class="slots" id="slots"></div>
+    <p class="mut" style="margin:12px 0 0">F marks the front slot and R the rear slot. After slot 7 the pointers wrap around to slot 0, so no space is wasted.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Last operation</h2><div id="log"></div>
+    <p class="mut" style="margin:10px 0 0">Recently served: <span id="done"></span></p>
+  </section>
+</main>
+
+<script src="canteen.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
+let mode = 'demo';
+const local = new CanteenLib.Canteen();   // used only when no backend is reachable
+
+async function call(op, body = {}) {
+  if (mode === 'api') {
+    const r = await fetch('/api/' + op, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    return d;
+  }
+  local[op](body);
+  return local.state();
+}
+async function act(op, body) {
+  try { render(await call(op, body)); return true; } catch (e) { $('err').textContent = e.message; return false; }
+}
+async function order() {
+  if (await act('order', { name: $('nm').value, item: $('item').value })) $('nm').value = '';
+}
+function render(s) {
+  $('err').textContent = '';
+  if (!$('item').options.length)
+    $('item').innerHTML = Object.entries(s.menu).map(([k, v]) => `<option value="${esc(k)}">${esc(k)} · ₹${v.price} · ${v.min} min</option>`).join('');
+  const f = s.line[0];
+  $('next').textContent = f ? `Next to serve: #${f.token} ${f.name} (${f.item})` : 'No orders waiting';
+  $('sv').disabled = !f;
+  $('cnt').textContent = `${s.size} of ${s.cap} places used`;
+  $('line').innerHTML = s.line.length ? s.line.map((o, i) =>
+    `<div class="tk${i === 0 ? ' fr' : ''}">${i === 0 ? '<span class="tag">FRONT</span>' : ''}${i === s.line.length - 1 ? '<span class="tag r">REAR</span>' : ''}
+      <b>#${o.token}</b><span>${esc(o.name)}</span><span>${esc(o.item)}</span><i>wait about ${o.wait} min</i></div>`).join('')
+    : '<em>The queue is empty. Place an order to start.</em>';
+  $('slots').innerHTML = s.slots.map((t, i) =>
+    `<div class="slot${t ? ' full' : ''}"><small>${i === s.front ? 'F' : ''}${i === s.rear ? (i === s.front ? ' R' : 'R') : ''}</small><b>${t ? '#' + t : '–'}</b><i>${i}</i></div>`).join('');
+  $('log').innerHTML = `<b>${esc(s.last.op)}</b> · time <b>${esc(s.last.cost)}</b> · ${esc(s.last.detail)}`;
+  $('done').textContent = s.served.length ? s.served.map(o => `#${o.token} ${o.name}`).join(', ') : 'nobody yet';
+}
+(async () => {
+  try {
+    const r = await fetch('/api/canteen');
+    if (!r.ok || !(r.headers.get('content-type') || '').includes('json')) throw 0;
+    mode = 'api'; render(await r.json()); $('mode').textContent = 'Backend connected';
+  } catch { render(local.state()); $('mode').textContent = 'Demo mode (in browser)'; }
+})();
+</script>
+</body>
+</html>
